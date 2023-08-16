@@ -7,62 +7,67 @@ from numba import jit, prange, njit
 from scipy.spatial import distance as sp_distance
 from scipy import stats as sp_stats
 
-@jit(nogil=True, nopython=True)
-def correlation(u, v, w=None, centered=True): #rip from scipy.spatial.distance source
-    """
-    Compute the correlation distance between two 1-D arrays.
-    The correlation distance between `u` and `v`, is
-    defined as
-    .. math::
-        1 - \\frac{(u - \\bar{u}) \\cdot (v - \\bar{v})}
-                  {{||(u - \\bar{u})||}_2 {||(v - \\bar{v})||}_2}
-    where :math:`\\bar{u}` is the mean of the elements of `u`
-    and :math:`x \\cdot y` is the dot product of :math:`x` and :math:`y`.
-    Parameters
-    ----------
-    u : (N,) array_like
-        Input array.
-    v : (N,) array_like
-        Input array.
-    w : (N,) array_like, optional
-        The weights for each value in `u` and `v`. Default is None,
-        which gives each value a weight of 1.0
-    Returns
-    -------
-    correlation : double
-        The correlation distance between 1-D array `u` and `v`.
-    """
-    if centered:
-        umu = np.mean(u) 
-        vmu = np.mean(v)
-        u = u - umu
-        v = v - vmu
-    uv = np.mean(u * v) 
-    uu = np.mean(np.square(u))
-    vv = np.mean(np.square(v))
-    dist = 1.0 - uv / np.sqrt(uu * vv)
-    return dist
+@jit(nopython=True, parallel=True)
+def corrDist(compSig, refArray):
+    def cor(u,v, centered=True): # ripped from scipy.spatial.distances
+        if centered:
+            umu = np.average(u)
+            vmu = np.average(v)
+            u = u - umu
+            v = v - vmu
+        uv = np.average(u*v)
+        uu = np.average(np.square(u))
+        vv = np.average(np.square(v))
+        dist = 1 - uv / np.sqrt(uu*vv)
+        return np.abs(dist)
 
-@njit(nogil=True, parallel = True)
-def numbaParallelCorrDistonRef(compSig,refArray):
-    """attempt at making a nice numba accelerated version of CorrDist function,
-    by parallelizing the specific compDist calculation to refSigs."""
-
-    # I need to refactor the code (it's too lengthy to read)
-    numRefSigs = refArray.shape[0]
-    returnDists = np.zeros(refArray.shape)
-
-    compSigMinusMean = compSig - np.mean(compSig)
-    compSigMeanSqr = np.mean(np.square(compSigMinusMean))
-
-    refMinusMean = lambda i: refArray[i] - np.mean(refArray[i])
-    refMeanSqr = lambda i: np.mean(np.square(refMinusMean(i)))
-
-    for i in prange(numRefSigs):
-        returnDists[i] = (1.0 - np.mean(compSigMinusMean * refMinusMean(i)) / np.sqrt(compSigMeanSqr * refMeanSqr(i)))
-
+    num_ref_sigs = refArray.shape[0]
+    return_dists = np.empty(num_ref_sigs)
     
-    return returnDists
+    for i in prange(num_ref_sigs):
+        x = refArray[i]
+        return_dists[i] = cor(compSig, x)
+        # return_dists[i] = np.sum((compSig - x)**2) / (np.sqrt(np.sum(compSig**2)) * np.sqrt(np.sum(x**2)))
+    
+    return return_dists
+
+@jit(nopython=True, parallel=True)
+def pearsonr(compSig, refArray):
+    num_ref_sigs = refArray.shape[0]
+    return_corrs = np.empty(num_ref_sigs)
+
+    for i in prange(num_ref_sigs):
+        x = refArray[i,:]
+        return_corrs[i] = np.corrcoef(x, compSig)[0,1]
+    return return_corrs
+
+
+def pairwiseCorrProcess(exp_df, ref_df, reporting_df=None, distance = True):
+    if reporting_df is None:
+        reporting_df = pd.DataFrame(columns=["TopSimilarRefComps"], index=exp_df.index)
+    
+    refCompounds = ["._.".join([str(y) for y in x]) for x in ref_df.index]
+
+    reporting_df['TopSimilarRefComps'] = "._.".join(refCompounds)
+    if distance:
+        data = exp_df.apply(lambda compSig:\
+            corrDist(compSig=compSig.to_numpy(), refArray=ref_df.to_numpy()),\
+            axis=1)
+        reporting_df['CorrespCorrDistance'] = \
+            ["._.".join(\
+                ["{:.10f}".format(d_1) for d_1 in d])\
+                for d in data]
+    else: 
+        data = exp_df.apply(lambda compSig:\
+            pearsonr(compSig=compSig, refArray=ref_df),\
+            axis=1)
+        reporting_df['CorrespPearsonSim'] = \
+            ["._.".join(\
+                ["{:.10f}".format(s_1) for s_1 in s])\
+                for s in data]
+            
+    return reporting_df
+    
 
 def main():
     allDF = pd.read_csv("data/AllReferenceExp_20191018_commonFeaturesOrder.csv",index_col=[0,1,2,3])
@@ -75,10 +80,13 @@ def main():
     #print(testSig.to_numpy().shape[0])
     print(len(allDF.iloc[0].to_numpy()))
 
-    def test():
-        return numbaParallelCorrDistonRef(testSig.values, allDF.to_numpy())[0]
+    final = pairwiseCorrProcess(testDF, allDF)
+    print(final.head(1))
+    # def test():
+    #     return corrDist(testSig.values, allDF.to_numpy())
+    #     # return numbaParallelCorrDistonRef(testSig.values, allDF.to_numpy())[0]
 
-    print(timeit.timeit(test, number=10000))
+    # print(timeit.timeit(test, number=7))
 
 
 if __name__ =='__main__':
