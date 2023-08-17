@@ -4,8 +4,6 @@ from io import StringIO
 import pandas as pd, numpy as np
 import time, timeit, cython
 from numba import jit, prange, njit
-from scipy.spatial import distance as sp_distance
-from scipy import stats as sp_stats
 
 @jit(nopython=True, parallel=True)
 def corrDist(compSig, refArray):
@@ -27,7 +25,6 @@ def corrDist(compSig, refArray):
     for i in prange(num_ref_sigs):
         x = refArray[i]
         return_dists[i] = cor(compSig, x)
-        # return_dists[i] = np.sum((compSig - x)**2) / (np.sqrt(np.sum(compSig**2)) * np.sqrt(np.sum(x**2)))
     
     return return_dists
 
@@ -44,44 +41,40 @@ def pearsonr(compSig, refArray):
 
 def pairwiseCorrProcess(exp_df, ref_df, reporting_df=None, distance = True):
     if reporting_df is None:
-        reporting_df = pd.DataFrame(columns=["TopSimilarRefComps"], index=exp_df.index)
+        reporting_df = pd.DataFrame(columns=ref_df.index, index=exp_df.index)
     
-    refCompounds = ["._.".join([str(y) for y in x]) for x in ref_df.index]
-
-    reporting_df['TopSimilarRefComps'] = "._.".join(refCompounds)
     if distance:
         data = exp_df.apply(lambda compSig:\
-            corrDist(compSig=compSig.to_numpy(), refArray=ref_df.to_numpy()),\
+            corrDist(compSig=compSig.to_numpy(), refArray=ref_df.to_numpy()).tolist(),\
             axis=1)
-        reporting_df['CorrespCorrDistance'] = \
-            ["._.".join(\
-                ["{:.10f}".format(d_1) for d_1 in d])\
-                for d in data]
+        # cols are the refIndex name
+        data = data.apply(pd.Series)
+        data.columns = list(ref_df.index)
+        reporting_df = pd.DataFrame(data, columns=ref_df.index)
     else: 
         data = exp_df.apply(lambda compSig:\
-            pearsonr(compSig=compSig, refArray=ref_df),\
+            pearsonr(compSig=compSig.to_numpy(), refArray=ref_df.to_numpy()),\
             axis=1)
-        reporting_df['CorrespPearsonSim'] = \
-            ["._.".join(\
-                ["{:.10f}".format(s_1) for s_1 in s])\
-                for s in data]
+        data = data.apply(pd.Series)
+        data.columns = list(ref_df.index)
+        reporting_df = pd.DataFrame(data, columns=ref_df.index)
             
     return reporting_df
-    
 
 def main():
     allDF = pd.read_csv("data/AllReferenceExp_20191018_commonFeaturesOrder.csv",index_col=[0,1,2,3])
     testDF = pd.read_csv("data/SP0142_20171024_HeLa_10x_0_CP_histdiff_Concatenated.csv",index_col=[0,1,2,3])
     testDF = testDF.reindex(columns = allDF.columns)
     print(allDF.to_numpy().shape)
-
+    # cols= 1) (optional) sheet name 2) relationship to ref 3) dist 4) R
     testSig_comp = testDF.index[0]
     testSig = testDF.loc[testSig_comp]
     #print(testSig.to_numpy().shape[0])
     print(len(allDF.iloc[0].to_numpy()))
 
-    final = pairwiseCorrProcess(testDF, allDF)
-    print(final.head(1))
+    final = pairwiseCorrProcess(testDF, allDF, distance=False)
+    print(final.head(5))
+    #final.to_csv('bruh2.csv', sep=',')
     # def test():
     #     return corrDist(testSig.values, allDF.to_numpy())
     #     # return numbaParallelCorrDistonRef(testSig.values, allDF.to_numpy())[0]
