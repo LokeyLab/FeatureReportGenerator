@@ -61,6 +61,27 @@ def pairwiseCorrProcess(exp_df, ref_df, reporting_df=None, distance = True):
             
     return reporting_df
 
+def createSubDf(i, distDf, pearsonDf): # instead of concatinating why not create a new df?
+    '''Create a sheet for a xlsx workbook'''
+    pageName = "._.".join(map(str, i))
+    combDf = pd.DataFrame({
+        'Pearson_R': pearsonDf[i],
+        'Corr_Dist': distDf[i]
+    })
+    return combDf, pageName
+
+def createXLSheet(distanceReport: pd.DataFrame, pearsonReport: pd.DataFrame, outName: str):
+    assert list(distanceReport.columns) == list(pearsonReport.columns)
+
+    print("Creating Excel file...", file=sys.stderr)
+    with pd.ExcelWriter(outName) as f:
+        for i in distanceReport.columns: #this actually takes so long to process, it might be better to cache some files
+            combDf, pageName = createSubDf(i, distDf=distanceReport, pearsonDf=pearsonReport)
+            combDf.to_excel(f, sheet_name=pageName)
+
+    print("...Completed!", file=sys.stderr)
+    return
+
 def main():
     allDF = pd.read_csv("data/AllReferenceExp_20191018_commonFeaturesOrder.csv",index_col=[0,1,2,3])
     testDF = pd.read_csv("data/SP0142_20171024_HeLa_10x_0_CP_histdiff_Concatenated.csv",index_col=[0,1,2,3])
@@ -72,15 +93,16 @@ def main():
     #print(testSig.to_numpy().shape[0])
     print(len(allDF.iloc[0].to_numpy()))
 
-    final = pairwiseCorrProcess(testDF, allDF, distance=False)
-    print(final.head(5))
-    #final.to_csv('bruh2.csv', sep=',')
-    # def test():
-    #     return corrDist(testSig.values, allDF.to_numpy())
-    #     # return numbaParallelCorrDistonRef(testSig.values, allDF.to_numpy())[0]
+    distance = pairwiseCorrProcess(testDF, allDF, distance=True)
+    print(testDF.index)
+    distance = distance.transpose()
 
-    # print(timeit.timeit(test, number=7))
+    pearson = pairwiseCorrProcess(testDF, allDF, distance=False)
+    pearson = pearson.transpose()
 
+    #createXLSheet(distanceReport=distance, pearsonReport=pearson, outName='yah.xlsx')
+   
+    print('done!', file=sys.stderr)
 
 if __name__ =='__main__':
     main()
