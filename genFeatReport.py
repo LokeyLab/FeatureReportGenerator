@@ -61,14 +61,14 @@ def pairwiseCorrProcess(exp_df, ref_df, reporting_df=None, distance = True):
             
     return reporting_df
 
-def createSubDf(i, distDf, pearsonDf): # instead of concatinating why not create a new df?
-    '''Create a sheet for a xlsx workbook'''
-    pageName = "._.".join(map(str, i))
-    combDf = pd.DataFrame({
-        'Pearson_R': pearsonDf[i],
-        'Corr_Dist': distDf[i]
-    })
-    return combDf, pageName
+# def createSubDf(i, distDf, pearsonDf): # instead of concatinating why not create a new df?
+#     '''Create a sheet for a xlsx workbook'''
+#     pageName = "._.".join(map(str, i))
+#     combDf = pd.DataFrame({
+#         'Pearson_R': pearsonDf[i],
+#         'Corr_Dist': distDf[i]
+#     })
+#     return combDf, pageName
 
 # def createXLSheet(distanceReport: pd.DataFrame, pearsonReport: pd.DataFrame, outName: str):
 #     assert list(distanceReport.columns) == list(pearsonReport.columns)
@@ -85,12 +85,13 @@ def createSubDf(i, distDf, pearsonDf): # instead of concatinating why not create
 import multiprocessing as mp
 from openpyxl import load_workbook, Workbook
 class CreateXLSheetMultithread:
-    def __init__(self, cwd, distanceReport: pd.DataFrame, pearsonReport: pd.DataFrame, outName: str, threads: int = None):
+    def __init__(self, cwd, distanceReport: pd.DataFrame, pearsonReport: pd.DataFrame, outName: str, threads: int = None, verbose = False):
         self.cwd = cwd
         self.distDf = distanceReport
         self.pearsonDf = pearsonReport
         self.threads = threads
         self.outName = outName
+        self.verbose = verbose
 
         self.folderPath = os.path.join(self.cwd, '.temp/')
     
@@ -109,7 +110,10 @@ class CreateXLSheetMultithread:
     def __chunkToExcel(self, chunk: dict, outName: str):
         with pd.ExcelWriter(outName, engine='openpyxl') as writer:
             for sheetName, df in chunk.items():
-                print(f'...Working on: {sheetName}...', file=sys.stderr)
+
+                if self.verbose:
+                    print(f'...Working on: {sheetName}...', file=sys.stderr)
+
                 df.to_excel(writer, sheet_name=sheetName, index=True)
     
     def __processhandler(self, startIndex, endIndex, data: list, notebookDir):
@@ -143,10 +147,11 @@ class CreateXLSheetMultithread:
         numCPUs = (mp.cpu_count() - 2) if self.threads is None else (self.threads - 1) 
         chunkSize = len(sheets) // numCPUs
 
-        print(f'Number of thread used in the program: {numCPUs} with 1 or 2 threads left as a spare', file=sys.stderr)
-        print(f'Partition Size: {chunkSize}', file=sys.stderr)
+        if self.verbose:
+            print(f'Number of thread used in the program: {numCPUs} with 1 or 2 threads left as a spare', file=sys.stderr)
+            print(f'Partition Size: {chunkSize}', file=sys.stderr)
 
-        print('Beginning Multithreading process...', file=sys.stderr)
+            print('Beginning Multithreading process...', file=sys.stderr)
 
         processes = []
         for start in range(0, len(sheets), chunkSize):
@@ -159,7 +164,8 @@ class CreateXLSheetMultithread:
         for process in processes:
             process.join()
 
-        print("...Multithreading process finished!", file=sys.stderr)
+        if self.verbose:
+            print("...Multithreading process finished!", file=sys.stderr)
         
     def combNotebooks(self):
         tempNotebooks = []
@@ -172,7 +178,9 @@ class CreateXLSheetMultithread:
         mergedWb = Workbook()
         mergedWb.remove(mergedWb.active)
 
-        print("Merging all partitioned notebooks", file=sys.stderr)
+        if self.verbose:
+            print("Merging all partitioned notebooks", file=sys.stderr)
+
         for notebook in tempNotebooks:
             workbook = load_workbook(filename=notebook, read_only=True)
 
@@ -186,39 +194,74 @@ class CreateXLSheetMultithread:
 
         mergedWb.save(self.outName)
 
-        print("Merging done!", file=sys.stderr)
+        if self.verbose:
+            print("Merging done!", file=sys.stderr)
         self.__cleanTempFiles()
 
+class CommandLine:
+    def __init__(self, inOpts = None):
+        import argparse
 
-def main():
-    from time import sleep
-    from time import time
-    allDF = pd.read_csv("data/AllReferenceExp_20191018_commonFeaturesOrder.csv",index_col=[0,1,2,3])
-    testDF = pd.read_csv("data/SP0142_20171024_HeLa_10x_0_CP_histdiff_Concatenated.csv",index_col=[0,1,2,3])
-    testDF = testDF.reindex(columns = allDF.columns)
-    # print(allDF.to_numpy().shape)
-    # cols= 1) (optional) sheet name 2) relationship to ref 3) dist 4) R
-    testSig_comp = testDF.index[0]
-    testSig = testDF.loc[testSig_comp]
+        # parser
+        self.parser = argparse.ArgumentParser(
+            description='Generates a Feature Report (xlsx file) that shows the reference compounds and its Correlation Distance and its Pearson R score',
+            add_help=True,
+            prefix_chars='-',
+            usage='python3 %(prog)s -e <experimental wells> -r <reference wells> -o <output name> [-options] [argument]'
+        )
+
+        # arguments
+        self.parser.add_argument('-e', '--experimental', type=str, nargs='?', action='store', help='file input for experimental wells (.csv file accepted only)', required=True)
+        self.parser.add_argument('-r', '--reference', type=str, nargs='?', action='store', help='file input for experimental wells (.csv files accepted only)', required=True)
+        self.parser.add_argument('-o', '--out', type=str, nargs='?', action='store', help='name for output file in xlsx format (make sure it ends in .xlsx)', required=True)
+        self.parser.add_argument('-t', '--threads', default=8, type=int, action='store', nargs=1, help='Number of threads to use for feature report writing (default: None [None = use all but 2 threads on system])')
+        self.parser.add_argument('-i', '--index', default=[0,1,2,3], type=int, action='store', nargs='+', help='Specifies which columns of the input files are the index columns (default: 0 1 2 3)')
+        self.parser.add_argument('-v', '--verbose', default=False, action='store_true', help='Enables verbose output to stderr (default: False) Note: I recommend having this flag enabled when testing or building with this program')
+
+        # arg parsing
+        if inOpts is None:
+            self.args = self.parser.parse_args()
+        else:
+            self.args = self.parser.parse_args(inOpts)
+
+def main(inOpts = None):
+    from time import sleep, time
+    # allDF = pd.read_csv("data/AllReferenceExp_20191018_commonFeaturesOrder.csv",index_col=[0,1,2,3])
+    # testDF = pd.read_csv("data/SP0142_20171024_HeLa_10x_0_CP_histdiff_Concatenated.csv",index_col=[0,1,2,3])
+    # testDF = testDF.reindex(columns = allDF.columns)
+    # # print(allDF.to_numpy().shape)
+    # # cols= 1) (optional) sheet name 2) relationship to ref 3) dist 4) R
+    # testSig_comp = testDF.index[0]
+    # testSig = testDF.loc[testSig_comp]
     #print(testSig.to_numpy().shape[0])
     # print(len(allDF.iloc[0].to_numpy()))
 
     ## Above are test files ##
     ###### Main program below this commented line ######
+    cl = CommandLine(inOpts=inOpts)
+
+    expDf = pd.read_csv(cl.args.experimental, sep=',', index_col=cl.args.index)
+    refDf = pd.read_csv(cl.args.reference, sep=',', index_col=cl.args.index)
+    outName = cl.args.out
+    threads = cl.args.threads
+    verbose = cl.args.verbose
+
     start = time()
 
-    distance = pairwiseCorrProcess(testDF, allDF, distance=True)
+    distance = pairwiseCorrProcess(exp_df=expDf, ref_df=refDf, distance=True)
     distance = distance.transpose()
 
-    pearson = pairwiseCorrProcess(testDF, allDF, distance=False)
+    pearson = pairwiseCorrProcess(exp_df=expDf, ref_df=refDf, distance=False)
     pearson = pearson.transpose()
 
-    xlsxgen = CreateXLSheetMultithread(cwd=os.getcwd(), distanceReport=distance, pearsonReport=pearson, outName='huh.xlsx', threads=8)
+    xlsxgen = CreateXLSheetMultithread(cwd=os.getcwd(), distanceReport=distance, pearsonReport=pearson, outName=outName, threads=threads, verbose=verbose)
     xlsxgen.parallelWrite()
     sleep(1) # wait for files to flush to disk
     xlsxgen.combNotebooks()
 
-    print(f'done! Completed in {time()-start}', file=sys.stderr)
+    if verbose:
+        runTime = time()-start
+        print(f'done! Completed in {int(runTime // 60)} min(s) {int(runTime % 60)} sec(s)', file=sys.stderr)
 
 if __name__ =='__main__':
     main()
