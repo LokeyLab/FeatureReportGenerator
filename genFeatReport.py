@@ -214,7 +214,7 @@ class CommandLine:
         self.parser.add_argument('-e', '--experimental', type=str, nargs='?', action='store', help='file input for experimental wells (.csv file accepted only)', required=True)
         self.parser.add_argument('-r', '--reference', type=str, nargs='?', action='store', help='file input for experimental wells (.csv files accepted only)', required=True)
         self.parser.add_argument('-o', '--out', type=str, nargs='?', action='store', help='name for output file in xlsx format (make sure it ends in .xlsx)', required=True)
-        self.parser.add_argument('-t', '--threads', default=8, type=int, action='store', nargs=1, help='Number of threads to use for feature report writing (default: 8)')
+        self.parser.add_argument('-t', '--threads', default=8, type=int, action='store', nargs='?', help='Number of threads to use for feature report writing (default: 8)')
         self.parser.add_argument('-i', '--index', default=[0,1,2,3], type=int, action='store', nargs='+', help='Specifies which columns of the input files are the index columns (default: 0 1 2 3)')
         self.parser.add_argument('-v', '--verbose', default=False, action='store_true', help='Enables verbose output to stderr (default: False) Note: I recommend having this flag enabled when testing or building with this program')
 
@@ -223,6 +223,12 @@ class CommandLine:
             self.args = self.parser.parse_args()
         else:
             self.args = self.parser.parse_args(inOpts)
+
+def pairwiseCorrDistProcess(expDf: pd.DataFrame, refDf: pd.DataFrame):
+    return pairwiseCorrProcess(expDf, refDf, distance=True)
+
+def pairwisePearsonProcess(expDf: pd.DataFrame, refDf: pd.DataFrame):
+    return pairwiseCorrProcess(expDf, refDf, distance=False)
 
 def main(inOpts = None):
     from time import sleep, time
@@ -248,16 +254,17 @@ def main(inOpts = None):
 
     start = time()
 
-    # try to make the calculations parallelized
+    # distance = pairwiseCorrProcess(exp_df=expDf, ref_df=refDf, distance=True)
+    # distance = distance.transpose()
 
+    # pearson = pairwiseCorrProcess(exp_df=expDf, ref_df=refDf, distance=False)
+    # pearson = pearson.transpose()
+
+    # try to make the calculations parallelized
     with mp.Pool(processes=2) as pool:
 
-        distanceAsync = pool.apply_async(pairwiseCorrProcess, args=(expDf, refDf, True,))
-        pearsonAsync = pool.apply_async(pairwiseCorrProcess, args=(expDf, refDf, False,))
-
-        # in order to maintain accuracy, we need to wait until both calculations are done
-        distanceAsync.wait() 
-        pearsonAsync.wait()
+        distanceAsync = pool.apply_async(pairwiseCorrDistProcess, args=(expDf, refDf))
+        pearsonAsync = pool.apply_async(pairwisePearsonProcess, args=(expDf, refDf))
 
         distance = distanceAsync.get().transpose()
         pearson = pearsonAsync.get().transpose()
