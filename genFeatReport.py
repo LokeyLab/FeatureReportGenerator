@@ -42,7 +42,6 @@ def pearsonr(compSig, refArray):
 def pairwiseCorrProcess(exp_df, ref_df, reporting_df=None, distance = True):
     if reporting_df is None:
         reporting_df = pd.DataFrame(columns=ref_df.index, index=exp_df.index)
-    
     if distance:
         data = exp_df.apply(lambda compSig:\
             corrDist(compSig=compSig.to_numpy(), refArray=ref_df.to_numpy()).tolist(),\
@@ -116,7 +115,7 @@ class CreateXLSheetMultithread:
 
                 df.to_excel(writer, sheet_name=sheetName, index=True)
     
-    def __processhandler(self, startIndex, endIndex, data: list, notebookDir):
+    def processhandler(self, startIndex, endIndex, data: list, notebookDir):
         chunk = {d[1]:d[0] for d in data[startIndex:endIndex]}
         nbName = f'temp_{startIndex}.xlsx'
         name = os.path.join(self.cwd, '.temp/', nbName)
@@ -124,7 +123,9 @@ class CreateXLSheetMultithread:
         self.__chunkToExcel(chunk=chunk, outName=name)
     
     def __createSubDf(self, i, distDf, pearsonDf):
-        pageName = "._.".join(map(str, i))
+        # pageName = "._.".join(map(str, i))
+        pageName = i # I need a fix to differentiate single column index vs multi column index
+        # print(f'pageName = {pageName}', file=sys.stderr)
         combDf = pd.DataFrame({
             'Pearson_R': pearsonDf[i],
             'Corr_Dist': distDf[i]
@@ -157,7 +158,7 @@ class CreateXLSheetMultithread:
         for start in range(0, len(sheets), chunkSize):
             end = start + chunkSize if start + chunkSize <= len(sheets) else len(sheets)
 
-            process = mp.Process(target=self.__processhandler, args=(start, end, sheets, self.cwd))
+            process = mp.Process(target=self.processhandler, args=(start, end, sheets, self.cwd))
             processes.append(process)
             process.start()
         
@@ -181,7 +182,10 @@ class CreateXLSheetMultithread:
         if self.verbose:
             print("Merging all partitioned notebooks", file=sys.stderr)
 
-        for notebook in tempNotebooks:
+        for i, notebook in enumerate(tempNotebooks):
+            if self.verbose:
+                print(f'Working on notebook {i}', file=sys.stderr)
+
             workbook = load_workbook(filename=notebook, read_only=True)
 
             for sheet in workbook.sheetnames:
@@ -268,7 +272,6 @@ def main(inOpts = None):
 
         distance = distanceAsync.get().transpose()
         pearson = pearsonAsync.get().transpose()
-
     xlsxgen = CreateXLSheetMultithread(cwd=os.getcwd(), distanceReport=distance, pearsonReport=pearson, outName=outName, threads=threads, verbose=verbose)
     xlsxgen.parallelWrite()
     sleep(1) # wait for files to flush to disk
