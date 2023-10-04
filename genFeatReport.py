@@ -84,13 +84,14 @@ def pairwiseCorrProcess(exp_df, ref_df, reporting_df=None, distance = True):
 import multiprocessing as mp
 from openpyxl import load_workbook, Workbook
 class CreateXLSheetMultithread:
-    def __init__(self, cwd, distanceReport: pd.DataFrame, pearsonReport: pd.DataFrame, outName: str, threads: int = None, verbose = False):
+    def __init__(self, cwd, distanceReport: pd.DataFrame, pearsonReport: pd.DataFrame, outName: str, threads: int = None, verbose = False, singleIndex = True):
         self.cwd = cwd
         self.distDf = distanceReport
         self.pearsonDf = pearsonReport
         self.threads = threads
         self.outName = outName
         self.verbose = verbose
+        self.singleIndex = singleIndex
 
         self.folderPath = os.path.join(self.cwd, '.temp/')
     
@@ -123,9 +124,11 @@ class CreateXLSheetMultithread:
         self.__chunkToExcel(chunk=chunk, outName=name)
     
     def __createSubDf(self, i, distDf, pearsonDf):
-        # pageName = "._.".join(map(str, i))
-        pageName = i # I need a fix to differentiate single column index vs multi column index
-        # print(f'pageName = {pageName}', file=sys.stderr)
+        if self.singleIndex:
+            pageName = i
+        else:
+            pageName = "._.".join(map(str, i))
+
         combDf = pd.DataFrame({
             'Pearson_R': pearsonDf[i],
             'Corr_Dist': distDf[i]
@@ -250,6 +253,8 @@ def main(inOpts = None):
     ###### Main program below this commented line ######
     cl = CommandLine(inOpts=inOpts)
 
+    singleIndex =  False if len(cl.args.index) > 1 else True
+
     expDf = pd.read_csv(cl.args.experimental, sep=',', index_col=cl.args.index)
     refDf = pd.read_csv(cl.args.reference, sep=',', index_col=cl.args.index)
     outName = cl.args.out
@@ -272,7 +277,7 @@ def main(inOpts = None):
 
         distance = distanceAsync.get().transpose()
         pearson = pearsonAsync.get().transpose()
-    xlsxgen = CreateXLSheetMultithread(cwd=os.getcwd(), distanceReport=distance, pearsonReport=pearson, outName=outName, threads=threads, verbose=verbose)
+    xlsxgen = CreateXLSheetMultithread(cwd=os.getcwd(), distanceReport=distance, pearsonReport=pearson, outName=outName, threads=threads, verbose=verbose, singleIndex=singleIndex)
     xlsxgen.parallelWrite()
     sleep(1) # wait for files to flush to disk
     xlsxgen.combNotebooks()
