@@ -223,6 +223,7 @@ class CommandLine:
         self.parser.add_argument('-o', '--out', type=str, nargs='?', action='store', help='name for output file in xlsx format (make sure it ends in .xlsx)', required=True)
         self.parser.add_argument('-t', '--threads', default=8, type=int, action='store', nargs='?', help='Number of threads to use for feature report writing (default: 8)')
         self.parser.add_argument('-i', '--index', default=[0,1,2,3], type=int, action='store', nargs='+', help='Specifies which columns of the input files are the index columns (default: 0 1 2 3)')
+        self.parser.add_argument('-w', '--wells', default=None, type=str,action='store', nargs='+', help='Specifies which wells specifically to process from the experiment.')
         self.parser.add_argument('-v', '--verbose', default=False, action='store_true', help='Enables verbose output to stderr (default: False) Note: I recommend having this flag enabled when testing or building with this program')
 
         # arg parsing
@@ -256,6 +257,9 @@ def main(inOpts = None):
     singleIndex =  False if len(cl.args.index) > 1 else True
 
     expDf = pd.read_csv(cl.args.experimental, sep=',', index_col=cl.args.index)
+    if cl.args.wells is not None:
+        expDf = expDf.loc[cl.args.wells]
+        
     refDf = pd.read_csv(cl.args.reference, sep=',', index_col=cl.args.index)
     outName = cl.args.out
     threads = cl.args.threads
