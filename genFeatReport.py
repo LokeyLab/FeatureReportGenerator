@@ -258,7 +258,8 @@ def main(inOpts = None):
 
     expDf = pd.read_csv(cl.args.experimental, sep=',', index_col=cl.args.index)
     if cl.args.wells is not None:
-        expDf = expDf.loc[cl.args.wells]
+        # print(cl.args.wells,file=sys.stderr)
+        expDf.drop(index=expDf.index.difference(cl.args.wells),inplace=True) #.copy()
         
     refDf = pd.read_csv(cl.args.reference, sep=',', index_col=cl.args.index)
     outName = cl.args.out
