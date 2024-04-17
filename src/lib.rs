@@ -4,9 +4,3 @@ pub mod lib_src;
 pub fn hello() {
     println!("hello");
 }
-
-pub fn wrapper() {
-    lib_src::tool::do_somthing()
-}
-
-pub use lib_src::tool::do_somthing;
