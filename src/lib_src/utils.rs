@@ -42,6 +42,7 @@ mod util_test {
             Series::new("D", vec![7.0, 8.0, 9.0]),
             Series::new("E", vec![7.0, 8.0, 9.0]),
             Series::new("F", vec![7.0, 8.0, 9.0]),
+            Series::new("G", vec![7.0, 8.0, 9.0]),
         ])
         .unwrap();
         println!("DF: {:?}", df);
