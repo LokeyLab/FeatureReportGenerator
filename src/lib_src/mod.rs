@@ -79,8 +79,8 @@ mod pairwise_corr_test {
 
     #[test]
     fn test_helper() -> Result<(), PolarsError> {
-        let exp_df = create_random_dataframe(384, 256).unwrap().clone();
-        let ref_df = create_random_dataframe(20000, 256).unwrap().clone();
+        let exp_df = create_random_dataframe(384, 5880).unwrap().clone();
+        let ref_df = create_random_dataframe(20000, 5880).unwrap().clone();
         let data = pairwise_corr_process_data(&exp_df, &ref_df, true).unwrap();
         println!("{:?}", data.shape()); //returns array of 384 x 15000
         Ok(())
