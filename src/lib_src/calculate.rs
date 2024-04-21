@@ -1,7 +1,7 @@
 use super::ArrayError;
 
 // use polars::{frame::row::Row, prelude::*};
-use ndarray::{Array1, Array2, Axis};
+use ndarray::{Array1, Array2};
 use rayon::prelude::*;
 
 fn centered_correlation(u: &Array1<f64>, v: &Array1<f64>) -> f64 {
