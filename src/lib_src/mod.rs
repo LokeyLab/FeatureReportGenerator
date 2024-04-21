@@ -84,7 +84,7 @@ mod pairwise_corr_test {
         let ref_df = create_random_dataframe(20000, ncols).unwrap().clone();
 
         println!("beginning test");
-        let data = pairwise_corr_process_data(&exp_df, &ref_df, true).unwrap();
+        let data = pairwise_corr_process_data(&exp_df, &ref_df, false).unwrap();
         println!("{:?}", data.shape()); //returns array of 384 x 15000
         Ok(())
     }
