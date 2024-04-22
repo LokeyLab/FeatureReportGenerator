@@ -1,1 +1,2 @@
-pub mod lib_src;
+mod lib_src;
+pub use lib_src::*;

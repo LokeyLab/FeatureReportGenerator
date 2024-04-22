@@ -1,5 +1,5 @@
-pub(crate) mod calculate;
-pub(crate) mod utils;
+mod calculate;
+mod utils;
 
 use ndarray::{Array2, Axis};
 use polars::prelude::*;
@@ -55,10 +55,11 @@ pub fn pairwise_corr_process(
     exp_df: &DataFrame,
     ref_df: &DataFrame,
     distance: bool,
+    idx: usize,
 ) -> Result<DataFrame, PolarsError> {
-    let exp_index = exp_df.select_at_idx(0).unwrap().clone();
+    let exp_index = exp_df.select_at_idx(idx).unwrap().clone();
     let ref_index: Vec<String> = ref_df
-        .select_at_idx(0)
+        .select_at_idx(idx)
         .unwrap()
         .str()
         .unwrap()
@@ -74,7 +75,7 @@ pub fn pairwise_corr_process(
     let res_arr = pairwise_corr_process_data(&exp_df_mut, &ref_df_mut, distance).unwrap();
     let mut reporting_df = ndarray_to_dataframe(&res_arr)?;
     reporting_df.set_column_names(&ref_index)?;
-    reporting_df.insert_column(0, exp_index)?;
+    reporting_df.insert_column(idx, exp_index)?;
 
     Ok(reporting_df)
 }
@@ -145,8 +146,22 @@ mod pairwise_corr_test {
 
         println!("{exp_df}\n{ref_df}\n------");
         println!("beginning test");
-        let data = pairwise_corr_process(&exp_df, &ref_df, false).unwrap();
+        let data = pairwise_corr_process(&exp_df, &ref_df, false, 0).unwrap();
         println!("{:?} {:?}", data.shape(), data); //returns array of 384 x 15000
+        Ok(())
+    }
+
+    fn read_csv(filename: &str) -> Result<DataFrame, PolarsError> {
+        CsvReader::from_path(filename)?.has_header(true).finish()
+    }
+    #[test]
+    fn test_real_df() -> Result<(), PolarsError> {
+        let ref_df = read_csv("/Users/dterciano/Desktop/LokeyLabFiles/TargetMol/Datasets/10uM/10uM_concats_complete/TargetMol_10uM_PMA_plateConcat_HD.csv")?;
+        let exp_df = read_csv("/Users/dterciano/Desktop/LokeyLabFiles/TargetMol/Datasets/10uM/10uMData/TargetMol_10uM2_1_HD.csv")?;
+        println!("{}\n{}\n------", ref_df, exp_df);
+        println!("beginning test");
+        let data = pairwise_corr_process(&exp_df, &ref_df, true, 0)?;
+        println!("{data}");
         Ok(())
     }
 }
