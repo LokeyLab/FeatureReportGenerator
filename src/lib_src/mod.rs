@@ -1,7 +1,7 @@
 pub(crate) mod calculate;
 pub(crate) mod utils;
 
-use ndarray::{Array2, Axis, Data};
+use ndarray::{Array2, Axis};
 use polars::prelude::*;
 use thiserror::Error;
 
@@ -51,43 +51,102 @@ fn pairwise_corr_process_data(
     return Ok(res_arr);
 }
 
-pub fn pairwise_corr_process(exp_df: &DataFrame, ref_df: &DataFrame, distance: bool) {}
+pub fn pairwise_corr_process(
+    exp_df: &DataFrame,
+    ref_df: &DataFrame,
+    distance: bool,
+) -> Result<DataFrame, PolarsError> {
+    let exp_index = exp_df.select_at_idx(0).unwrap().clone();
+    let ref_index: Vec<String> = ref_df
+        .select_at_idx(0)
+        .unwrap()
+        .str()
+        .unwrap()
+        .into_iter()
+        .filter_map(|name| name.map(|n| n.to_string()))
+        .collect();
+
+    let mut exp_df_mut = exp_df.clone();
+    let mut ref_df_mut = ref_df.clone();
+    let _ = exp_df_mut.drop_in_place(exp_df_mut.clone().get_column_names()[0])?;
+    let _ = ref_df_mut.drop_in_place(ref_df_mut.clone().get_column_names()[0])?;
+
+    let res_arr = pairwise_corr_process_data(&exp_df_mut, &ref_df_mut, distance).unwrap();
+    let mut reporting_df = ndarray_to_dataframe(&res_arr)?;
+    reporting_df.set_column_names(&ref_index)?;
+    reporting_df.insert_column(0, exp_index)?;
+
+    Ok(reporting_df)
+}
 
 #[cfg(test)]
 mod pairwise_corr_test {
+    use crate::lib_src::pairwise_corr_process;
+
     use super::pairwise_corr_process_data;
-    use ndarray::Array2;
     use rand::Rng;
     // use ndarray_rand::rand_distr::Uniform;
     // use ndarray_rand::RandomExt;
     use polars::prelude::*;
-    fn create_random_dataframe(nrows: i32, ncols: usize) -> Result<DataFrame, PolarsError> {
-        // let nrows = 384;
-        // let ncols = 234;
+    fn create_random_dataframe(
+        nrows: i32,
+        ncols: usize,
+        dummy_index: bool,
+    ) -> Result<DataFrame, PolarsError> {
         let mut rng = rand::thread_rng();
 
         // Create a Vec of Series, each with random f64 values
-        let mut series_vec = Vec::with_capacity(ncols);
+        let mut series_vec = Vec::with_capacity(ncols + if dummy_index { 1 } else { 0 });
+
+        // If dummy_index is true, create an "index" column with sequential integers
+        if dummy_index {
+            let index_values: Vec<String> = (0..nrows).map(|i| i.to_string()).collect(); // Generating indices
+            let index_series = Series::new("index", &index_values);
+            series_vec.push(index_series); // Adding the index series as the first column
+        }
+
+        // Generate random f64 columns
         for i in 0..ncols {
-            // Generate random f64 values for each column
             let values: Vec<f64> = (0..nrows).map(|_| rng.gen()).collect();
-            let series = Series::new(format!("col{}", i).as_str(), &values);
+            let series = Series::new(&format!("col{}", i), &values);
             series_vec.push(series);
         }
 
         // Combine all Series into a DataFrame
-        DataFrame::new(series_vec)
+        let df = DataFrame::new(series_vec)?;
+
+        // Get the list of column names, sort them, and then select columns in sorted order
+        // let mut column_names = df.get_column_names();
+        // column_names.sort(); // Sorts column names alphabetically
+        // df = df.select(&column_names)?; // Reorder DataFrame based on sorted column names
+
+        Ok(df)
     }
 
     #[test]
     fn test_helper() -> Result<(), PolarsError> {
         let ncols = 5880;
-        let exp_df = create_random_dataframe(384, ncols).unwrap().clone();
-        let ref_df = create_random_dataframe(20000, ncols).unwrap().clone();
+        let exp_df = create_random_dataframe(384, ncols, false).unwrap().clone();
+        let ref_df = create_random_dataframe(20000, ncols, false)
+            .unwrap()
+            .clone();
 
         println!("beginning test");
         let data = pairwise_corr_process_data(&exp_df, &ref_df, false).unwrap();
         println!("{:?}", data.shape()); //returns array of 384 x 15000
+        Ok(())
+    }
+
+    #[test]
+    fn test_main_corr() -> Result<(), PolarsError> {
+        let ncols = 5880;
+        let exp_df = create_random_dataframe(384, ncols, true).unwrap().clone();
+        let ref_df = create_random_dataframe(20000, ncols, true).unwrap().clone();
+
+        println!("{exp_df}\n{ref_df}\n------");
+        println!("beginning test");
+        let data = pairwise_corr_process(&exp_df, &ref_df, false).unwrap();
+        println!("{:?} {:?}", data.shape(), data); //returns array of 384 x 15000
         Ok(())
     }
 }

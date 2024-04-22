@@ -1,6 +1,5 @@
 use ndarray::{Array2, Axis};
 use polars::prelude::*;
-use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use rayon::prelude::*;
 
 pub(crate) fn df_to_ndarray(df: &DataFrame) -> Result<Array2<f64>, PolarsError> {
@@ -43,7 +42,7 @@ pub(crate) fn ndarray_to_dataframe(array: &Array2<f64>) -> Result<DataFrame, Pol
 #[cfg(test)]
 mod util_test {
     use super::*;
-    use polars::{frame::DataFrame, prelude::*, series::Series};
+    use polars::{frame::DataFrame, series::Series};
 
     #[test]
     fn df_to_ndarray_test() {
