@@ -1,7 +1,7 @@
 pub(crate) mod calculate;
 pub(crate) mod utils;
 
-use ndarray::{Array2, Axis};
+use ndarray::{Array2, Axis, Data};
 use polars::prelude::*;
 use thiserror::Error;
 
@@ -50,6 +50,8 @@ fn pairwise_corr_process_data(
 
     return Ok(res_arr);
 }
+
+pub fn pairwise_corr_process(exp_df: &DataFrame, ref_df: &DataFrame, distance: bool) {}
 
 #[cfg(test)]
 mod pairwise_corr_test {
