@@ -1,0 +1,98 @@
+use polars::prelude::*;
+use xlsxwriter::*;
+
+/// fits characters into max_len
+fn truncate_string(s: &str, max_len: usize) -> String {
+    match s.char_indices().nth(max_len) {
+        Some((idx, _)) => s[..idx].to_string(),
+        None => s.to_string(),
+    }
+}
+
+/// Reads a csv and returns a polars dataframe
+pub fn read_csv(file_path: &str) -> Result<DataFrame, PolarsError> {
+    CsvReader::from_path(file_path)?.has_header(true).finish()
+}
+
+/// Writes a dataframe into standard feature report format
+pub fn write_dataframe(df: &DataFrame, idx: usize, outpath: &str) -> Result<(), XlsxError> {
+    let workbook = Workbook::new(outpath)?;
+    let nrows = df.height();
+    let col_names = df.get_column_names();
+
+    for row_idx in 0..nrows {
+        let row = df.get(row_idx).unwrap(); // getting a row is actually expensive
+
+        let sheet_name: &str = &row[idx].clone().to_string();
+        let trunc_name: &str = &truncate_string(sheet_name, 30);
+
+        let mut worksheet = workbook.add_worksheet(Some(trunc_name))?;
+        let _ = worksheet.write_string(0, 0, "Reference", None);
+        let _ = worksheet.write_string(0, 1, &format!("Exp: {}", trunc_name), None);
+
+        for (col_idx, val) in row.iter().enumerate().skip(idx + 1) {
+            // let v = to_f64(val).unwrap();
+            let v = match val {
+                // type conversion to float
+                AnyValue::Float64(f) => *f,
+                _ => panic!(),
+            };
+
+            let _ = worksheet.write_string(col_idx as u32, 0, col_names[col_idx], None);
+            let _ = worksheet.write_number(col_idx as u32, 1, v, None);
+        }
+    }
+
+    let _ = workbook.close();
+    return Ok(());
+}
+
+#[cfg(test)]
+mod test_io {
+    use super::*;
+    use rand::Rng;
+
+    fn create_random_dataframe(
+        nrows: i32,
+        ncols: usize,
+        dummy_index: bool,
+    ) -> Result<DataFrame, PolarsError> {
+        let mut rng = rand::thread_rng();
+
+        // Create a Vec of Series, each with random f64 values
+        let mut series_vec = Vec::with_capacity(ncols + if dummy_index { 1 } else { 0 });
+
+        // If dummy_index is true, create an "index" column with sequential integers
+        if dummy_index {
+            let index_values: Vec<String> = (0..nrows).map(|i| i.to_string()).collect(); // Generating indices
+            let index_series = Series::new("index", &index_values);
+            series_vec.push(index_series); // Adding the index series as the first column
+        }
+
+        // Generate random f64 columns
+        for i in 0..ncols {
+            let values: Vec<f64> = (0..nrows).map(|_| rng.gen()).collect();
+            let series = Series::new(&format!("col{}", i), &values);
+            series_vec.push(series);
+        }
+
+        // Combine all Series into a DataFrame
+        let df = DataFrame::new(series_vec)?;
+
+        // Get the list of column names, sort them, and then select columns in sorted order
+        // let mut column_names = df.get_column_names();
+        // column_names.sort(); // Sorts column names alphabetically
+        // df = df.select(&column_names)?; // Reorder DataFrame based on sorted column names
+
+        Ok(df)
+    }
+
+    #[test]
+    fn test_writer() -> Result<(), PolarsError> {
+        let df = create_random_dataframe(10, 12, true)?;
+        println!("{df}");
+
+        write_dataframe(&df, 0, "yrjhdyf.xlsx").unwrap();
+        return Ok(());
+    }
+}

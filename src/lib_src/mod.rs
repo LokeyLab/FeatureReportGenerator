@@ -1,4 +1,5 @@
 mod calculate;
+mod io;
 mod utils;
 
 use ndarray::{Array2, Axis};
@@ -16,6 +17,7 @@ pub enum ArrayError {
 }
 
 use calculate::{corr_dist, pearsonr};
+pub use io::*;
 use utils::*;
 
 fn pairwise_corr_process_data(
