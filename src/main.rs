@@ -17,7 +17,11 @@ struct Args {
     #[arg(short, long, help = "Output file path (must end in .xlsx)")]
     outpath: String,
 
-    #[arg(short, long, help = "Number of threads to use")]
+    #[arg(
+        short,
+        long,
+        help = "Number of threads to use (optional: all avaliable cores avaliable if not specified)"
+    )]
     threads: Option<usize>,
 
     #[arg(short, long, help = "index column")]
