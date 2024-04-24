@@ -1,6 +1,27 @@
 use polars::prelude::*;
 use xlsxwriter::*;
 
+/// Sanitizes a string to be a valid Excel worksheet name.
+fn sanitize_worksheet_name(name: &str) -> String {
+    let invalid_chars = &[':', '\\', '/', '?', '*', '[', ']'];
+    let mut clean_name: String = name
+        .chars()
+        .filter(|c| !invalid_chars.contains(c))
+        .collect();
+
+    // Truncate to maximum length for Excel sheet names (31 characters)
+    if clean_name.len() > 31 {
+        clean_name.truncate(31);
+    }
+
+    // Replace empty names with a default name
+    if clean_name.is_empty() {
+        clean_name = "DefaultName".to_string();
+    }
+
+    clean_name
+}
+
 /// fits characters into max_len
 fn truncate_string(s: &str, max_len: usize) -> String {
     match s.char_indices().nth(max_len) {
@@ -25,15 +46,16 @@ pub fn write_dataframe(df: &DataFrame, idx: usize, outpath: &str) -> Result<(), 
 
         let sheet_name: &str = &row[idx].clone().to_string();
         let trunc_name: &str = &truncate_string(sheet_name, 30);
+        let clean_name: &str = &sanitize_worksheet_name(trunc_name);
 
-        if let Some(w) = workbook.get_worksheet(trunc_name).unwrap() {
-            continue; // Skip adding a new worksheet if it already exists
-        }
+        // if let Some(w) = workbook.get_worksheet(trunc_name).unwrap() {
+        //     continue; // Skip adding a new worksheet if it already exists
+        // }
 
         println!("{}", trunc_name);
-        let mut worksheet = workbook.add_worksheet(Some(trunc_name))?;
+        let mut worksheet = workbook.add_worksheet(Some(clean_name))?;
         let _ = worksheet.write_string(0, 0, "Reference", None);
-        let _ = worksheet.write_string(0, 1, &format!("Exp: {}", trunc_name), None);
+        let _ = worksheet.write_string(0, 1, &format!("Exp: {}", sheet_name), None);
 
         for (col_idx, val) in row.iter().enumerate().skip(idx + 1) {
             // let v = to_f64(val).unwrap();
@@ -54,7 +76,6 @@ pub fn write_dataframe(df: &DataFrame, idx: usize, outpath: &str) -> Result<(), 
 
 #[cfg(test)]
 mod test_io {
-    use crate::pairwise_corr_process;
 
     use super::*;
     use rand::Rng;
