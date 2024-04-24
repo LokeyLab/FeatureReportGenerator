@@ -37,6 +37,10 @@ fn main() {
     let exp_df = read_csv(&args.exp_input).unwrap();
     let ref_df = read_csv(&args.ref_input).unwrap();
 
+    if exp_df.width() != ref_df.width() {
+        panic!("Experimental and reference sets do not have the same number of features")
+    }
+
     if let Some(t) = args.threads {
         ThreadPoolBuilder::new()
             .num_threads(t)
