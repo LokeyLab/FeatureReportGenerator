@@ -48,11 +48,6 @@ pub fn write_dataframe(df: &DataFrame, idx: usize, outpath: &str) -> Result<(), 
         let trunc_name: &str = &truncate_string(sheet_name, 30);
         let clean_name: &str = &sanitize_worksheet_name(trunc_name);
 
-        // if let Some(w) = workbook.get_worksheet(trunc_name).unwrap() {
-        //     continue; // Skip adding a new worksheet if it already exists
-        // }
-
-        println!("{}", trunc_name);
         let mut worksheet = workbook.add_worksheet(Some(clean_name))?;
         let _ = worksheet.write_string(0, 0, "Reference", None);
         let _ = worksheet.write_string(0, 1, &format!("Exp: {}", sheet_name), None);
