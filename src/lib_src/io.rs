@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use polars::prelude::*;
 use xlsxwriter::*;
 
@@ -41,18 +42,22 @@ pub fn write_dataframe(df: &DataFrame, idx: usize, outpath: &str) -> Result<(), 
     let nrows = df.height();
     let col_names = df.get_column_names();
 
+    //formatting stuff
+    let mut bold_format = Format::new();
+    bold_format.set_bold();
+
     // making table of contents
     let mut tab_of_conts = workbook.add_worksheet(Some(&"SUMMARY"))?;
     let idx_col = &df.get_columns()[idx];
-    let _ = tab_of_conts.write_string(0, 0, "Sheet Title", None);
-    let _ = tab_of_conts.write_string(0, 1, "Tab Num", None);
+    let _ = tab_of_conts.write_string(0, 0, "Sheet Title", Some(&bold_format));
+    let _ = tab_of_conts.write_string(0, 1, "Tab Num", Some(&bold_format));
     for (row_idx, row) in idx_col.iter().enumerate() {
         let curr_idx = row_idx + 1;
 
         let _ = tab_of_conts.write_string(curr_idx as u32, 1, &format!("{}", curr_idx), None);
 
         let val = row.get_str().unwrap();
-        let _ = tab_of_conts.write_string(curr_idx as u32, 0, val, None);
+        let _ = tab_of_conts.write_string(curr_idx as u32, 0, val, Some(&bold_format));
     }
 
     for row_idx in 0..nrows {
@@ -61,8 +66,8 @@ pub fn write_dataframe(df: &DataFrame, idx: usize, outpath: &str) -> Result<(), 
         let sheet_name: &str = &row[idx].clone().to_string();
 
         let mut worksheet = workbook.add_worksheet(Some(&format!("{}", row_idx + 1)))?;
-        let _ = worksheet.write_string(0, 0, "Reference", None);
-        let _ = worksheet.write_string(0, 1, &format!("Exp: {}", sheet_name), None);
+        let _ = worksheet.write_string(0, 0, "Reference", Some(&bold_format));
+        let _ = worksheet.write_string(0, 1, &format!("Exp: {}", sheet_name), Some(&bold_format));
 
         for (col_idx, val) in row.iter().enumerate().skip(idx + 1) {
             // let v = to_f64(val).unwrap();
@@ -72,7 +77,8 @@ pub fn write_dataframe(df: &DataFrame, idx: usize, outpath: &str) -> Result<(), 
                 _ => panic!("not a float value"),
             };
 
-            let _ = worksheet.write_string(col_idx as u32, 0, col_names[col_idx], None);
+            let _ =
+                worksheet.write_string(col_idx as u32, 0, col_names[col_idx], Some(&bold_format));
             let _ = worksheet.write_number(col_idx as u32, 1, v, None);
         }
     }
