@@ -6,7 +6,7 @@ fn sanitize_worksheet_name(name: &str) -> String {
     let invalid_chars = &[':', '\\', '/', '?', '*', '[', ']'];
     let mut clean_name: String = name
         .chars()
-        .filter(|c| !invalid_chars.contains(c))
+        .map(|c| if invalid_chars.contains(&c) { '_' } else { c })
         .collect();
 
     // Truncate to maximum length for Excel sheet names (31 characters)
