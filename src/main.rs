@@ -26,13 +26,6 @@ struct Args {
 
     #[arg(short, long, help = "index column")]
     index: usize,
-
-    #[arg(
-        short,
-        long,
-        help = "If distance correlation (default) or pearson r should be used"
-    )]
-    distance: bool,
 }
 
 fn main() {
@@ -52,12 +45,14 @@ fn main() {
             .unwrap();
     }
 
-    let dist = !args.distance;
     let idx = args.index;
     let out_path = args.outpath;
-    let rep_df = pairwise_corr_process(&exp_df, &ref_df, dist, idx);
+    let corrdist_df = pairwise_corr_process(&exp_df, &ref_df, true, idx);
+    let pearson_df = pairwise_corr_process(&exp_df, &ref_df, false, idx);
 
-    if let Ok(ref df) = rep_df {
-        write_dataframe(df, idx, &out_path).unwrap();
+    if let Ok(ref c_df) = corrdist_df {
+        if let Ok(ref p_df) = pearson_df {
+            write_dataframe(c_df, p_df, idx, &out_path).unwrap();
+        }
     }
 }
